@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#030712" />
+  <title>LifeHorizon — ชีวิตของฉัน</title>
+
+  <!-- Apply dark mode before React renders to prevent FOUC -->
+  <script>
+    try {
+      var t = JSON.parse(localStorage.getItem('lh_theme'));
+      if (t !== 'light') document.documentElement.classList.add('dark');
+    } catch (e) {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+
+  <!-- Google Fonts: Sarabun (Thai) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Sarabun', 'system-ui', 'sans-serif'] },
+          colors: {
+            surface: { light: '#ffffff', dark: '#111827' },
+            base:    { light: '#f9fafb', dark: '#030712' },
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18 + ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Standalone (JSX transform) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: 'Sarabun', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 3px; height: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+    /* Tab fade-in */
+    .tab-enter { animation: tabFadeIn 0.18s ease forwards; }
+    @keyframes tabFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Progress ring smooth fill */
+    .ring-progress { transition: stroke-dashoffset 1.6s cubic-bezier(0.4,0,0.2,1); }
+
+    /* Live dot pulse */
+    .pulse-dot { animation: pulseDot 1.2s ease-in-out infinite; }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    /* Card lift on hover */
+    .card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .card-lift:hover { transform: translateY(-2px); }
+
+    /* Input focus ring */
+    input:focus, textarea:focus { outline: none; }
+
+    /* Datetime local fix on dark */
+    input[type="date"], input[type="datetime-local"] { color-scheme: dark; }
+    .dark input[type="date"], .dark input[type="datetime-local"] { color-scheme: dark; }
+    html:not(.dark) input[type="date"], html:not(.dark) input[type="datetime-local"] { color-scheme: light; }
+
+    /* Prevent iOS zoom on input focus */
+    input, textarea, select { font-size: 16px; }
+
+    /* Bottom nav safe area */
+    .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef, useMemo, memo } = React;
+
+/* ─────────────────────────────────────────
+   STORAGE HELPERS
+───────────────────────────────────────── */
+const storage = {
+  get: (key, fallback = null) => {
+    try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+  },
+  set: (key, value) => {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  },
+  remove: (key) => { try { localStorage.removeItem(key); } catch {} }
+};
+
+/* ─────────────────────────────────────────
+   CALCULATION UTILS
+───────────────────────────────────────── */
+const LIFE_EXPECTANCY = 77;
+const TOTAL_WEEKS     = LIFE_EXPECTANCY * 52; // 4004
+
+const calcYearProgress = () => {
+  const now       = new Date();
+  const year      = now.getFullYear();
+  const startOfYear = new Date(year, 0, 1);
+  const endOfYear   = new Date(year + 1, 0, 1);
+  const totalDays   = Math.round((endOfYear - startOfYear) / 86_400_000);
+  const daysPassed  = Math.floor((now - startOfYear) / 86_400_000) + 1;
+  const daysLeft    = totalDays - daysPassed;
+  const pct         = (daysPassed / totalDays) * 100;
+  return { year, daysPassed, daysLeft, totalDays, pct };
+};
+
+const calcLifeStats = (dob) => {
+  const birth    = new Date(dob);
+  const now      = new Date();
+  const ageMs    = now - birth;
+  const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365.25);
+  const spentPct = Math.min((ageYears / LIFE_EXPECTANCY) * 100, 100);
+  const weeksLived     = Math.floor(ageMs / (1000 * 60 * 60 * 24 * 7));
+  const weeksRemaining = Math.max(TOTAL_WEEKS - weeksLived, 0);
+  const daysTotal      = LIFE_EXPECTANCY * 365.25;
+  const daysLived      = ageMs / (1000 * 60 * 60 * 24);
+  const daysRemaining  = Math.max(Math.floor(daysTotal - daysLived), 0);
+  return { ageYears, spentPct, remainingPct: 100 - spentPct, weeksLived, weeksRemaining, daysRemaining };
+};
+
+const calcTimeLeft = (deadline) => {
+  const diff = new Date(deadline) - new Date();
+  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
+  return {
+    days:    Math.floor(diff / (1000 * 60 * 60 * 24)),
+    hours:   Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+    minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+    seconds: Math.floor((diff % (1000 * 60)) / 1000),
+    expired: false,
+    totalMs: diff,
+  };
+};
+
+const pad  = (n) => String(Math.abs(n)).padStart(2, '0');
+const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ─────────────────────────────────────────
+   THEME HOOK
+───────────────────────────────────────── */
+const useTheme = () => {
+  const [dark, setDark] = useState(() => storage.get('lh_theme', 'dark') !== 'light');
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    storage.set('lh_theme', dark ? 'dark' : 'light');
+  }, [dark]);
+  return [dark, () => setDark(d => !d)];
+};
+
+/* ─────────────────────────────────────────
+   SVG PROGRESS RING
+───────────────────────────────────────── */
+const ProgressRing = ({ pct, size = 210, stroke = 15 }) => {
+  const r    = (size - stroke * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const off  = circ - (Math.min(pct, 100) / 100) * circ;
+  const c    = size / 2;
+  return (
+    <svg width={size} height={size} style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="#22d3ee" />
+          <stop offset="100%" stopColor="#0e7490" />
+        </linearGradient>
+      </defs>
+      {/* Track */}
+      <circle cx={c} cy={c} r={r} fill="none" strokeWidth={stroke}
+        className="stroke-gray-800 dark:stroke-gray-800" />
+      {/* Fill */}
+      <circle cx={c} cy={c} r={r} fill="none" strokeWidth={stroke}
+        stroke="url(#ringGrad)"
+        strokeDasharray={circ}
+        strokeDashoffset={off}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${c} ${c})`}
+        className="ring-progress" />
+    </svg>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WEEKS GRID (memoized — only renders inside accordion)
+───────────────────────────────────────── */
+const WeeksGrid = memo(({ weeksLived }) => {
+  const blocks = useMemo(() => Array.from({ length: TOTAL_WEEKS }), []);
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(52, 1fr)', gap: '2px' }}>
+      {blocks.map((_, i) => (
+        <div key={i}
+          style={{ width: '5px', height: '5px', borderRadius: '1px' }}
+          className={i < weeksLived ? 'bg-cyan-500' : 'bg-gray-800'} />
+      ))}
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────
+   COUNTDOWN CARD
+───────────────────────────────────────── */
+const CountdownCard = ({ item, onDelete }) => {
+  const [time, setTime] = useState(() => calcTimeLeft(item.deadline));
+
+  useEffect(() => {
+    const t = setInterval(() => setTime(calcTimeLeft(item.deadline)), 1000);
+    return () => clearInterval(t);
+  }, [item.deadline]);
+
+  const urgency = time.expired          ? 'text-red-400'
+                : time.days === 0       ? 'text-red-400'
+                : time.days <= 3        ? 'text-amber-400'
+                                        : 'text-cyan-400';
+  const deadlineFmt = new Date(item.deadline).toLocaleDateString('th-TH', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  return (
+    <div className="card-lift bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+      <div className="flex items-start justify-between mb-3 gap-2">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug truncate">{item.name}</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{deadlineFmt}</p>
+        </div>
+        <button onClick={() => onDelete(item.id)}
+          className="text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors text-sm leading-none mt-0.5 shrink-0">✕</button>
+      </div>
+
+      {time.expired ? (
+        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2 text-red-500 dark:text-red-400 text-sm font-medium text-center">
+          หมดเวลาแล้ว
+        </div>
+      ) : (
+        <>
+          <div className={`grid grid-cols-4 gap-2 ${urgency}`}>
+            {[['วัน', time.days], ['ชม.', time.hours], ['นาที', time.minutes], ['วิ', time.seconds]].map(([label, val]) => (
+              <div key={label} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
+                <div className="text-xl font-bold tabular-nums leading-tight">{pad(val)}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 mt-2.5">
+            <span className="pulse-dot w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0"></span>
+            <span className="text-xs text-gray-400">นับถอยหลังแบบ real-time</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   BOTTOM NAVIGATION
+───────────────────────────────────────── */
+const NAV = [
+  { id: 'life',  label: 'ชีวิต',       icon: '⧗' },
+  { id: 'north', label: 'ดาวเหนือ',     icon: '✦' },
+  { id: 'count', label: 'นับถอยหลัง',  icon: '◷' },
+  { id: 'goals', label: 'เป้าหมาย',    icon: '◎' },
+  { id: 'notes', label: 'บันทึก',       icon: '◻' },
+];
+
+const BottomNav = ({ active, onSelect }) => (
+  <nav className="bottom-nav fixed bottom-0 inset-x-0 z-50
+    bg-white/90 dark:bg-gray-950/95 backdrop-blur-md
+    border-t border-gray-200 dark:border-gray-800">
+    <div className="max-w-lg mx-auto flex">
+      {NAV.map(({ id, label, icon }) => {
+        const isActive = active === id;
+        return (
+          <button key={id} onClick={() => onSelect(id)}
+            className={`flex-1 flex flex-col items-center justify-center pt-2.5 pb-2 gap-0.5 transition-all duration-150 ${
+              isActive ? 'text-cyan-500' : 'text-gray-400 dark:text-gray-600'
+            }`}>
+            <span className="text-[18px] leading-none">{icon}</span>
+            <span className="text-[10px] font-medium">{label}</span>
+            <span className={`h-0.5 w-4 rounded-full transition-all duration-200 ${isActive ? 'bg-cyan-500' : 'bg-transparent'}`}></span>
+          </button>
+        );
+      })}
+    </div>
+  </nav>
+);
+
+/* ─────────────────────────────────────────
+   TAB: ชีวิต (Life Progress)
+───────────────────────────────────────── */
+const LifeTab = ({ user }) => {
+  const [gridOpen, setGridOpen] = useState(false);
+  const stats    = useMemo(() => calcLifeStats(user.dob), [user.dob]);
+  const yearStat = useMemo(() => calcYearProgress(), []);
+  const { ageYears, spentPct, remainingPct, weeksLived, weeksRemaining, daysRemaining } = stats;
+  const { year, daysPassed, daysLeft, totalDays, pct: yearPct } = yearStat;
+
+  return (
+    <div className="space-y-4">
+      {/* Greeting */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+          สวัสดี, {user.name}
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          อายุ {ageYears.toFixed(1)} ปี · ชีวิตกำลังดำเนินไป
+        </p>
+      </div>
+
+      {/* Ring Card */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 flex flex-col items-center">
+        <div className="relative">
+          <ProgressRing pct={spentPct} size={210} stroke={15} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-4xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">
+              {spentPct.toFixed(1)}%
+            </span>
+            <span className="text-xs text-gray-400 mt-1">ผ่านไปแล้ว</span>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-2 w-full mt-5">
+          {[
+            { top: `${remainingPct.toFixed(1)}%`, bot: 'ที่เหลือ' },
+            { top: daysRemaining.toLocaleString('th'), bot: 'วันที่เหลือ' },
+            { top: weeksRemaining.toLocaleString('th'), bot: 'สัปดาห์ที่เหลือ' },
+          ].map(({ top, bot }) => (
+            <div key={bot} className="bg-gray-50 dark:bg-gray-800 rounded-xl py-3 px-2 text-center">
+              <div className="text-base font-bold text-gray-900 dark:text-gray-100">{top}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{bot}</div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-gray-400 mt-4 text-center">
+          อิงจากอายุขัยเฉลี่ยคนไทย 77 ปี (WHO/กรมอนามัย)
+        </p>
+      </div>
+
+      {/* Year Progress Card */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              ปี {year} ผ่านไปแล้ว
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              วันที่ {daysPassed} จาก {totalDays} วัน
+            </p>
+          </div>
+          <span className="text-2xl font-bold text-cyan-500 tabular-nums">
+            {yearPct.toFixed(1)}%
+          </span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden mb-3">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700"
+            style={{ width: `${yearPct.toFixed(2)}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl py-2.5 px-3 text-center">
+            <div className="text-base font-bold text-gray-900 dark:text-gray-100">{daysPassed.toLocaleString('th')}</div>
+            <div className="text-xs text-gray-400 mt-0.5">วันที่ผ่านไป</div>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl py-2.5 px-3 text-center">
+            <div className="text-base font-bold text-cyan-500">{daysLeft.toLocaleString('th')}</div>
+            <div className="text-xs text-gray-400 mt-0.5">วันที่เหลือในปีนี้</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Weeks Grid accordion */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <button onClick={() => setGridOpen(o => !o)}
+          className="w-full px-4 py-3.5 flex items-center justify-between text-left">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">แผนที่สัปดาห์ชีวิต</p>
+            <p className="text-xs text-gray-400 mt-0.5">{weeksLived.toLocaleString('th')} / {TOTAL_WEEKS.toLocaleString('th')} สัปดาห์</p>
+          </div>
+          <span className="text-gray-400 text-xs ml-3">{gridOpen ? '▲' : '▼'}</span>
+        </button>
+
+        {gridOpen && (
+          <div className="px-4 pb-4 border-t border-gray-50 dark:border-gray-800 pt-3">
+            <div className="overflow-x-auto">
+              <WeeksGrid weeksLived={weeksLived} />
+            </div>
+            <div className="flex gap-4 mt-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-sm bg-cyan-500"></div>
+                <span className="text-xs text-gray-400">ผ่านมาแล้ว</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-sm bg-gray-800"></div>
+                <span className="text-xs text-gray-400">ยังเหลืออยู่</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quote */}
+      <div className="rounded-2xl px-5 py-4 bg-cyan-500/8 border border-cyan-500/15">
+        <p className="text-sm text-cyan-600 dark:text-cyan-400 font-medium italic text-center leading-relaxed">
+          "ความสำเร็จที่มาผิดเวลา นั่นไม่เรียกว่าความสำเร็จ"
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   TAB: ดาวเหนือ (North Star)
+───────────────────────────────────────── */
+const NorthStarTab = () => {
+  const [data, setData] = useState(() => storage.get('lh_northstar', { happiness: '', goals: '' }));
+
+  const handleChange = (field, value) => {
+    const next = { ...data, [field]: value };
+    setData(next);
+    storage.set('lh_northstar', next);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">ดาวเหนือของฉัน</h1>
+        <p className="text-sm text-gray-400 mt-0.5">เข็มทิศนำทางทุกการตัดสินใจ</p>
+      </div>
+
+      {[
+        {
+          field: 'happiness',
+          icon: '✨',
+          title: 'ความสุขที่แท้จริงของฉัน',
+          placeholder: 'อะไรทำให้ฉันมีความสุขอย่างแท้จริง?\nเมื่อไรที่ฉันรู้สึกมีชีวิตชีวาที่สุด?\nอะไรที่ทำแล้วรู้สึกว่าคุ้มค่าชีวิต?...',
+        },
+        {
+          field: 'goals',
+          icon: '🎯',
+          title: 'เป้าหมายสูงสุดของฉัน',
+          placeholder: 'ถ้าฉันทำสำเร็จทุกอย่าง ชีวิตจะเป็นแบบไหน?\nอยากเป็นใคร? อยากมีอะไร? อยากทำอะไร?\nฉันอยากให้คนจำฉันว่าอย่างไร?...',
+        },
+      ].map(({ field, icon, title, placeholder }) => (
+        <div key={field} className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xl">{icon}</span>
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{title}</h2>
+          </div>
+          <textarea
+            value={data[field]}
+            onChange={e => handleChange(field, e.target.value)}
+            placeholder={placeholder}
+            rows={5}
+            className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl p-3.5
+              text-sm resize-none border-0 placeholder-gray-300 dark:placeholder-gray-600 leading-relaxed
+              focus:ring-2 focus:ring-cyan-500/30 transition-shadow"
+          />
+          {data[field] && (
+            <p className="text-xs text-gray-400 mt-1.5 text-right">{data[field].length} ตัวอักษร</p>
+          )}
+        </div>
+      ))}
+
+      <p className="text-xs text-gray-400 text-center">✓ บันทึกอัตโนมัติในอุปกรณ์ของคุณ</p>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   TAB: นับถอยหลัง (Countdowns)
+───────────────────────────────────────── */
+const CountdownsTab = () => {
+  const [items, setItems]   = useState(() => storage.get('lh_countdowns', []));
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]     = useState({ name: '', deadline: '' });
+  const notifAvailable      = typeof Notification !== 'undefined';
+  const [notifPerm, setNotifPerm] = useState(notifAvailable ? Notification.permission : 'unavailable');
+
+  const persist = (next) => { setItems(next); storage.set('lh_countdowns', next); };
+
+  const addItem = () => {
+    if (!form.name.trim() || !form.deadline) return;
+    persist([...items, { id: uid(), name: form.name.trim(), deadline: form.deadline }]);
+    setForm({ name: '', deadline: '' });
+    setShowForm(false);
+  };
+
+  const deleteItem = (id) => persist(items.filter(i => i.id !== id));
+
+  const requestNotif = async () => {
+    if (!notifAvailable) return;
+    const perm = await Notification.requestPermission();
+    setNotifPerm(perm);
+  };
+
+  // Periodic check: notify when deadline < 24h
+  useEffect(() => {
+    if (!notifAvailable || Notification.permission !== 'granted') return;
+    const tick = setInterval(() => {
+      items.forEach(item => {
+        const diff = new Date(item.deadline) - new Date();
+        if (diff > 0 && diff < 86_400_000) {
+          const t = calcTimeLeft(item.deadline);
+          try {
+            new Notification('LifeHorizon — ใกล้ถึงกำหนดแล้ว!', {
+              body: `"${item.name}" เหลืออีก ${t.hours} ชม. ${pad(t.minutes)} นาที`,
+            });
+          } catch {}
+        }
+      });
+    }, 60_000);
+    return () => clearInterval(tick);
+  }, [items, notifPerm]);
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">นับถอยหลัง</h1>
+          <p className="text-sm text-gray-400 mt-0.5">เป้าหมายที่มีเส้นตาย</p>
+        </div>
+        <button onClick={() => setShowForm(true)}
+          className="bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+          + เพิ่ม
+        </button>
+      </div>
+
+      {/* Notification prompt */}
+      {notifAvailable && notifPerm !== 'granted' && notifPerm !== 'denied' && (
+        <div className="bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 flex items-center gap-3">
+          <div className="flex-1">
+            <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">รับแจ้งเตือนเมื่อใกล้ถึงกำหนด</p>
+            <p className="text-xs text-amber-600/70 dark:text-amber-500/70 mt-0.5">แจ้งเตือนภายใน 24 ชม. ก่อนหมดเวลา</p>
+          </div>
+          <button onClick={requestNotif}
+            className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition-colors">
+            เปิดเลย
+          </button>
+        </div>
+      )}
+
+      {/* Add form */}
+      {showForm && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-cyan-500/30">
+          <h2 className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-3">เพิ่มการนับถอยหลัง</h2>
+          <input
+            type="text"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder="ชื่อเป้าหมาย เช่น ออมเงิน 10,000 บาท"
+            className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm
+              border border-transparent focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/15 transition-all
+              placeholder-gray-300 dark:placeholder-gray-600 mb-2"
+          />
+          <input
+            type="datetime-local"
+            value={form.deadline}
+            onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
+            min={new Date().toISOString().slice(0,16)}
+            className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-2.5 text-sm
+              border border-transparent focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/15 transition-all mb-3"
+          />
+          <div className="flex gap-2">
+            <button onClick={addItem}
+              disabled={!form.name.trim() || !form.deadline}
+              className="flex-1 bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-200 dark:disabled:bg-gray-700
+                disabled:text-gray-400 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
+              เพิ่ม
+            </button>
+            <button onClick={() => { setShowForm(false); setForm({ name: '', deadline: '' }); }}
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 py-2.5 rounded-xl text-sm transition-colors">
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {items.length === 0 ? (
+        <div className="text-center py-16 text-gray-300 dark:text-gray-700">
+          <div className="text-5xl mb-3">◷</div>
+          <p className="text-sm">ยังไม่มีการนับถอยหลัง</p>
+          <p className="text-xs mt-1 text-gray-400">กด + เพิ่ม เพื่อเริ่มต้น</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map(item => (
+            <CountdownCard key={item.id} item={item} onDelete={deleteItem} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   SMART WIZARD — step definitions
+───────────────────────────────────────── */
+const SMART_STEPS = [
+  {
+    key: 'specific', letter: 'S', color: 'bg-cyan-500',
+    label: 'Specific — ชัดเจน',
+    question: 'ฉันต้องการทำ "อะไร" อย่างชัดเจน?',
+    hint: 'ระบุให้ละเอียดที่สุด ใคร ทำอะไร ที่ไหน',
+    placeholder: 'เช่น: หารายได้จากการตัดต่อวิดีโอ 10,000 บาท ภายใน 3 สัปดาห์ ก่อนเปิดเทอม',
+    type: 'textarea',
+  },
+  {
+    key: 'measurable', letter: 'M', color: 'bg-blue-500',
+    label: 'Measurable — วัดผลได้',
+    question: 'ตัวชี้วัดความสำเร็จคืออะไร?',
+    hint: 'จะรู้ได้ยังไงว่าสำเร็จแล้ว?',
+    placeholder: 'เช่น: มีเงินในบัญชี 10,000 บาท / ได้รับงาน 10 คลิป ที่ 1,000 บาท/คลิป',
+    type: 'textarea',
+  },
+  {
+    key: 'achievable', letter: 'A', color: 'bg-violet-500',
+    label: 'Achievable — ทำได้จริง',
+    question: 'ขั้นตอน 3 อย่างที่จะทำให้สำเร็จ?',
+    hint: 'แอ็กชั่นที่ทำได้ภายใน 24-48 ชม.',
+    placeholder: 'เช่น:\n1) สร้าง portfolio ตัดต่อ 3 ชิ้น\n2) ยิง DM หาลูกค้า 20 คน\n3) ลงทะเบียน Fastwork',
+    type: 'textarea',
+  },
+  {
+    key: 'relevant', letter: 'R', color: 'bg-rose-500',
+    label: 'Relevant — เชื่อมกับเป้าหมายใหญ่',
+    question: 'ทำไมเป้าหมายนี้ถึงสำคัญกับชีวิตฉัน?',
+    hint: 'เชื่อมกับ "ทำไม" ที่ลึกที่สุดของคุณ',
+    placeholder: 'เช่น: เพื่อแบ่งเบาภาระพ่อแม่ และพิสูจน์ว่าตัวเองยืนได้ด้วยตัวเองก่อนที่ท่านจะแก่ลง',
+    type: 'textarea',
+  },
+  {
+    key: 'timebound', letter: 'T', color: 'bg-emerald-500',
+    label: 'Time-bound — กำหนดเวลา',
+    question: 'เส้นตายของเป้าหมายนี้?',
+    hint: 'เลือกวันที่ที่ท้าทายแต่ทำได้จริง',
+    placeholder: '',
+    type: 'date',
+  },
+];
+
+const SmartWizard = ({ wizard, onNext, onCancel }) => {
+  const [value, setValue] = useState('');
+  const step      = SMART_STEPS[wizard.step];
+  const isLast    = wizard.step === SMART_STEPS.length - 1;
+  const canProceed = value.trim().length > 0;
+
+  const handleNext = () => { if (canProceed) { onNext(value.trim()); setValue(''); } };
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-cyan-500/25">
+      {/* Step progress bar */}
+      <div className="flex gap-1.5 mb-5">
+        {SMART_STEPS.map((s, i) => (
+          <div key={s.key}
+            className={`flex-1 h-1 rounded-full transition-all duration-300 ${
+              i < wizard.step  ? 'bg-cyan-500' :
+              i === wizard.step ? 'bg-cyan-400' :
+                                  'bg-gray-200 dark:bg-gray-700'
+            }`} />
+        ))}
+      </div>
+
+      {/* Step badge */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`${step.color} text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shrink-0`}>
+          {step.letter}
+        </span>
+        <div>
+          <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">{step.label}</p>
+          <p className="text-xs text-gray-400">{step.hint}</p>
+        </div>
+        <span className="ml-auto text-xs text-gray-400">{wizard.step + 1}/{SMART_STEPS.length}</span>
+      </div>
+
+      <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-3 leading-snug">{step.question}</h2>
+
+      {step.type === 'date' ? (
+        <input type="date" value={value} onChange={e => setValue(e.target.value)}
+          min={new Date().toISOString().split('T')[0]}
+          className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl px-3.5 py-3 text-sm
+            border border-transparent focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/15 transition-all mb-3" />
+      ) : (
+        <textarea value={value} onChange={e => setValue(e.target.value)}
+          placeholder={step.placeholder} rows={4}
+          className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl p-3.5 text-sm
+            resize-none border border-transparent focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/15
+            transition-all placeholder-gray-300 dark:placeholder-gray-600 leading-relaxed mb-3" />
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={handleNext} disabled={!canProceed}
+          className="flex-1 bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-200 dark:disabled:bg-gray-700
+            disabled:text-gray-400 text-white py-3 rounded-xl text-sm font-semibold transition-colors">
+          {isLast ? 'สร้างเป้าหมาย ✓' : 'ถัดไป →'}
+        </button>
+        <button onClick={onCancel}
+          className="px-4 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 py-3 rounded-xl text-sm transition-colors">
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const GoalCard = ({ goal, onDelete, expanded, onToggle }) => {
+  const daysLeft = goal.timebound
+    ? Math.ceil((new Date(goal.timebound) - new Date()) / 86_400_000)
+    : null;
+
+  const badge =
+    daysLeft === null     ? null
+    : daysLeft < 0        ? { text: 'หมดเวลา',           cls: 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400' }
+    : daysLeft === 0      ? { text: 'วันสุดท้าย!',        cls: 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400' }
+    : daysLeft <= 7       ? { text: `เหลือ ${daysLeft} วัน`, cls: 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' }
+                          : { text: `เหลือ ${daysLeft} วัน`, cls: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400' };
+
+  return (
+    <div className="card-lift bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
+      <button onClick={onToggle} className="w-full p-4 text-left">
+        <div className="flex items-start gap-2 justify-between">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">{goal.specific}</p>
+            {badge && (
+              <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1.5 font-medium ${badge.cls}`}>
+                {badge.text}
+              </span>
+            )}
+          </div>
+          <span className="text-gray-300 dark:text-gray-600 text-xs mt-0.5 shrink-0">{expanded ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-50 dark:border-gray-800 pt-3">
+          {[
+            { letter: 'M', label: 'วัดผลได้', color: 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400', value: goal.measurable },
+            { letter: 'A', label: 'ขั้นตอน',  color: 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400', value: goal.achievable },
+            { letter: 'R', label: 'ทำไมสำคัญ', color: 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400', value: goal.relevant },
+            { letter: 'T', label: 'กำหนดเวลา', color: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
+              value: goal.timebound ? new Date(goal.timebound).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
+          ].map(({ letter, label, color, value }) => (
+            <div key={letter} className="flex gap-3 items-start">
+              <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${color}`}>
+                {letter}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-400">{label}</p>
+                <p className="text-sm text-gray-800 dark:text-gray-200 mt-0.5 whitespace-pre-wrap leading-snug">{value}</p>
+              </div>
+            </div>
+          ))}
+          <button onClick={() => onDelete(goal.id)}
+            className="text-xs text-red-400 hover:text-red-500 transition-colors pt-1">
+            ลบเป้าหมายนี้
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const GoalsTab = () => {
+  const [goals, setGoals]       = useState(() => storage.get('lh_goals', []));
+  const [wizard, setWizard]     = useState(null);
+  const [expandedId, setExpId]  = useState(null);
+
+  const persist = (next) => { setGoals(next); storage.set('lh_goals', next); };
+
+  const startWizard = () => setWizard({ step: 0, data: {} });
+
+  const handleNext = (value) => {
+    const step = SMART_STEPS[wizard.step];
+    const data = { ...wizard.data, [step.key]: value };
+    if (wizard.step < SMART_STEPS.length - 1) {
+      setWizard({ step: wizard.step + 1, data });
+    } else {
+      persist([...goals, { id: uid(), ...data, createdAt: new Date().toISOString() }]);
+      setWizard(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">เป้าหมาย SMART</h1>
+          <p className="text-sm text-gray-400 mt-0.5">วางแผนอย่างเป็นระบบ</p>
+        </div>
+        {!wizard && (
+          <button onClick={startWizard}
+            className="bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+            + ตั้งเป้า
+          </button>
+        )}
+      </div>
+
+      {wizard && <SmartWizard wizard={wizard} onNext={handleNext} onCancel={() => setWizard(null)} />}
+
+      {!wizard && goals.length === 0 && (
+        <div className="text-center py-16 text-gray-300 dark:text-gray-700">
+          <div className="text-5xl mb-3">◎</div>
+          <p className="text-sm">ยังไม่มีเป้าหมาย SMART</p>
+          <p className="text-xs mt-1 text-gray-400">กด + ตั้งเป้า เพื่อเริ่มต้น</p>
+        </div>
+      )}
+
+      {!wizard && goals.length > 0 && (
+        <div className="space-y-3">
+          {goals.map(g => (
+            <GoalCard key={g.id} goal={g}
+              onDelete={id => persist(goals.filter(x => x.id !== id))}
+              expanded={expandedId === g.id}
+              onToggle={() => setExpId(id => id === g.id ? null : g.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   TAB: บันทึก (Daily Notes)
+───────────────────────────────────────── */
+const NotesTab = () => {
+  const [content, setContent] = useState(() => storage.get('lh_notes', ''));
+  const [savedAt, setSavedAt] = useState(null);
+  const timerRef = useRef(null);
+
+  const handleChange = (v) => {
+    setContent(v);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      storage.set('lh_notes', v);
+      setSavedAt(new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
+    }, 700);
+  };
+
+  const today = new Date().toLocaleDateString('th-TH', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  const PROMPTS = [
+    'วันนี้ฉันทำอะไรที่ใกล้เป้าหมายบ้าง?',
+    'อะไรที่ฉันรู้สึกขอบคุณวันนี้?',
+    'พรุ่งนี้จะทำอะไรให้ดีขึ้น?',
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">บันทึกประจำวัน</h1>
+        <p className="text-sm text-gray-400 mt-0.5">{today}</p>
+      </div>
+
+      {/* Quick prompts */}
+      <div className="flex flex-wrap gap-2">
+        {PROMPTS.map(p => (
+          <button key={p} onClick={() => handleChange(content + (content ? '\n\n' : '') + p + '\n')}
+            className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400
+              hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:text-cyan-600 dark:hover:text-cyan-400
+              px-3 py-1.5 rounded-lg transition-colors">
+            {p}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <textarea
+          value={content}
+          onChange={e => handleChange(e.target.value)}
+          placeholder={`เขียนอะไรก็ได้...\n\nบันทึกความคิด, สิ่งที่ทำวันนี้, หรือสะท้อนตัวเอง`}
+          className="w-full h-72 bg-transparent text-gray-900 dark:text-gray-100 p-5 text-sm resize-none
+            border-0 placeholder-gray-300 dark:placeholder-gray-600 leading-relaxed"
+        />
+        <div className="px-5 pb-4 flex items-center justify-between border-t border-gray-50 dark:border-gray-800 pt-2">
+          <span className="text-xs text-gray-300 dark:text-gray-600">{content.length} ตัวอักษร</span>
+          {savedAt
+            ? <span className="text-xs text-green-500">✓ บันทึกแล้ว {savedAt}</span>
+            : <span className="text-xs text-gray-300 dark:text-gray-600">บันทึกอัตโนมัติ</span>
+          }
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-400 text-center">
+        ข้อมูลทั้งหมดเก็บในอุปกรณ์ของคุณเท่านั้น · ไม่มีการส่งข้อมูลออก
+      </p>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   ONBOARDING SCREEN
+───────────────────────────────────────── */
+const OnboardingScreen = ({ onComplete }) => {
+  const [step, setStep] = useState(0);
+  const [name, setName] = useState('');
+  const [dob,  setDob]  = useState('');
+
+  const preview = dob ? calcLifeStats(dob) : null;
+
+  return (
+    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+
+        {/* Step 0: Welcome */}
+        {step === 0 && (
+          <div className="text-center space-y-7">
+            <div>
+              <div className="text-6xl mb-4">⧗</div>
+              <h1 className="text-3xl font-bold text-white tracking-tight">LifeHorizon</h1>
+              <p className="text-gray-400 text-sm mt-2">ภาพรวมชีวิต · เป้าหมาย · ทุกอย่างในที่เดียว</p>
+            </div>
+
+            <div className="space-y-3 text-left">
+              {[
+                { icon: '⧗', text: 'เห็นภาพรวมชีวิตแบบ Memento Mori' },
+                { icon: '✦', text: 'บันทึกความสุขและเป้าหมายสูงสุดของคุณ' },
+                { icon: '◷', text: 'นับถอยหลังสู่เป้าหมายแบบ real-time' },
+                { icon: '◎', text: 'วางแผนด้วย SMART Goal Framework' },
+                { icon: '◻', text: 'บันทึกความคิดประจำวัน' },
+              ].map(({ icon, text }) => (
+                <div key={text} className="flex items-center gap-3">
+                  <span className="text-cyan-400 w-5 text-center text-sm">{icon}</span>
+                  <span className="text-gray-300 text-sm">{text}</span>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setStep(1)}
+              className="w-full bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-white font-semibold
+                py-4 rounded-2xl text-base transition-colors">
+              เริ่มต้นเลย →
+            </button>
+            <p className="text-xs text-gray-600">ข้อมูลทั้งหมดเก็บในอุปกรณ์ของคุณ · ไม่มีบัญชี · ไม่มี server</p>
+          </div>
+        )}
+
+        {/* Step 1: Name */}
+        {step === 1 && (
+          <div className="space-y-6">
+            <div>
+              <button onClick={() => setStep(0)} className="text-gray-500 text-sm mb-4 flex items-center gap-1">
+                ← กลับ
+              </button>
+              <h2 className="text-2xl font-bold text-white">ชื่อของคุณคืออะไร?</h2>
+              <p className="text-gray-400 text-sm mt-1">ใช้ทักทายในแอป</p>
+            </div>
+            <input
+              type="text" value={name} onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && name.trim() && setStep(2)}
+              placeholder="ชื่อของคุณ"
+              autoFocus
+              className="w-full bg-gray-900 text-white rounded-2xl px-5 py-4 text-lg
+                border border-gray-700 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20
+                transition-all placeholder-gray-600"
+            />
+            <button onClick={() => name.trim() && setStep(2)}
+              className={`w-full font-semibold py-4 rounded-2xl text-base transition-colors ${
+                name.trim()
+                  ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                  : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              }`}>
+              ถัดไป →
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: Date of Birth */}
+        {step === 2 && (
+          <div className="space-y-6">
+            <div>
+              <button onClick={() => setStep(1)} className="text-gray-500 text-sm mb-4 flex items-center gap-1">
+                ← กลับ
+              </button>
+              <h2 className="text-2xl font-bold text-white">วันเกิดของ {name}?</h2>
+              <p className="text-gray-400 text-sm mt-1">ใช้คำนวณ % ชีวิตที่ผ่านไปแล้ว</p>
+            </div>
+
+            <input
+              type="date" value={dob} onChange={e => setDob(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              className="w-full bg-gray-900 text-white rounded-2xl px-5 py-4 text-base
+                border border-gray-700 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+            />
+
+            {preview && (
+              <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800 space-y-2">
+                <p className="text-sm text-gray-400">
+                  อายุ <span className="text-white font-semibold">{preview.ageYears.toFixed(1)} ปี</span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
+                    <div className="bg-cyan-500 h-full rounded-full transition-all duration-700"
+                      style={{ width: `${preview.spentPct.toFixed(1)}%` }} />
+                  </div>
+                  <span className="text-cyan-400 font-bold text-sm">{preview.spentPct.toFixed(1)}%</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  เหลือ <span className="text-gray-300">{preview.daysRemaining.toLocaleString('th')} วัน</span> · <span className="text-gray-300">{preview.weeksRemaining.toLocaleString('th')} สัปดาห์</span>
+                </p>
+              </div>
+            )}
+
+            <button onClick={() => dob && onComplete({ name: name.trim(), dob })}
+              className={`w-full font-semibold py-4 rounded-2xl text-base transition-colors ${
+                dob
+                  ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                  : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              }`}>
+              เริ่มใช้ LifeHorizon →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   DASHBOARD SHELL
+───────────────────────────────────────── */
+const Dashboard = ({ user, onReset, dark, toggleTheme }) => {
+  const [tab, setTab] = useState('life');
+
+  const tabs = {
+    life:  <LifeTab user={user} />,
+    north: <NorthStarTab />,
+    count: <CountdownsTab />,
+    goals: <GoalsTab />,
+    notes: <NotesTab />,
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      {/* Top header */}
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-cyan-500 text-lg">⧗</span>
+            <span className="font-bold text-gray-900 dark:text-gray-100 text-sm tracking-tight">LifeHorizon</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={toggleTheme}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:text-gray-800
+                dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-base">
+              {dark ? '☀' : '◑'}
+            </button>
+            <button onClick={onReset}
+              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
+                px-2 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              รีเซ็ต
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Tab content */}
+      <main className="max-w-lg mx-auto px-4 py-5 pb-28 tab-enter" key={tab}>
+        {tabs[tab]}
+      </main>
+
+      {/* Bottom navigation */}
+      <BottomNav active={tab} onSelect={setTab} />
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   RESET CONFIRMATION MODAL
+───────────────────────────────────────── */
+const ResetModal = ({ onConfirm, onCancel }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-100 dark:border-gray-700 shadow-2xl">
+      <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg mb-2">รีเซ็ตข้อมูลทั้งหมด?</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+        ข้อมูลทั้งหมด (ชื่อ, วันเกิด, เป้าหมาย, บันทึก) จะถูกลบออกจากอุปกรณ์ของคุณ และไม่สามารถกู้คืนได้
+      </p>
+      <div className="flex gap-2">
+        <button onClick={onConfirm}
+          className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl text-sm font-semibold transition-colors">
+          รีเซ็ต
+        </button>
+        <button onClick={onCancel}
+          className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-3 rounded-xl text-sm font-medium transition-colors">
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────
+   APP ROOT
+───────────────────────────────────────── */
+const STORAGE_KEYS = ['lh_user', 'lh_northstar', 'lh_countdowns', 'lh_goals', 'lh_notes'];
+
+const App = () => {
+  const [user,      setUser]      = useState(() => storage.get('lh_user', null));
+  const [dark,      toggleTheme]  = useTheme();
+  const [showReset, setShowReset] = useState(false);
+
+  const handleOnboarding = (data) => {
+    storage.set('lh_user', data);
+    setUser(data);
+  };
+
+  const handleReset = () => {
+    STORAGE_KEYS.forEach(k => storage.remove(k));
+    setUser(null);
+    setShowReset(false);
+  };
+
+  return (
+    <>
+      {!user && <OnboardingScreen onComplete={handleOnboarding} />}
+      {user  && (
+        <Dashboard
+          user={user}
+          onReset={() => setShowReset(true)}
+          dark={dark}
+          toggleTheme={toggleTheme}
+        />
+      )}
+      {showReset && <ResetModal onConfirm={handleReset} onCancel={() => setShowReset(false)} />}
+    </>
+  );
+};
+
+/* ─────────────────────────────────────────
+   MOUNT
+───────────────────────────────────────── */
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
