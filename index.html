@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#030712" />
   <title>LifeHorizon — ชีวิตของฉัน</title>
 
@@ -89,6 +89,15 @@
 
     /* Bottom nav safe area */
     .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+    /* Sidebar scroll */
+    .sidebar-nav { scrollbar-width: none; }
+    .sidebar-nav::-webkit-scrollbar { display: none; }
+
+    /* Desktop content offset */
+    @media (min-width: 1024px) {
+      .with-sidebar { margin-left: 256px; }
+    }
   </style>
 </head>
 <body class="bg-gray-950 text-gray-100">
@@ -284,10 +293,10 @@ const NAV = [
 ];
 
 const BottomNav = ({ active, onSelect }) => (
-  <nav className="bottom-nav fixed bottom-0 inset-x-0 z-50
+  <nav className="bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-50
     bg-white/90 dark:bg-gray-950/95 backdrop-blur-md
     border-t border-gray-200 dark:border-gray-800">
-    <div className="max-w-lg mx-auto flex">
+    <div className="flex">
       {NAV.map(({ id, label, icon }) => {
         const isActive = active === id;
         return (
@@ -306,6 +315,65 @@ const BottomNav = ({ active, onSelect }) => (
 );
 
 /* ─────────────────────────────────────────
+   SIDEBAR NAVIGATION — desktop only
+───────────────────────────────────────── */
+const SideNav = ({ active, onSelect, user, dark, toggleTheme, onReset }) => (
+  <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-64 flex-col
+    bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800">
+
+    {/* Logo + user */}
+    <div className="px-5 pt-6 pb-5 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-cyan-500/10 flex items-center justify-center shrink-0">
+          <span className="text-cyan-500 text-lg">⧗</span>
+        </div>
+        <div className="min-w-0">
+          <p className="font-bold text-gray-900 dark:text-gray-100 text-sm leading-tight">LifeHorizon</p>
+          <p className="text-xs text-gray-400 mt-0.5 truncate">สวัสดี, {user.name}</p>
+        </div>
+      </div>
+    </div>
+
+    {/* Nav links */}
+    <nav className="sidebar-nav flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      {NAV.map(({ id, label, icon }) => {
+        const isActive = active === id;
+        return (
+          <button key={id} onClick={() => onSelect(id)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              isActive
+                ? 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/70 hover:text-gray-900 dark:hover:text-gray-100'
+            }`}>
+            <span className={`text-base w-5 text-center leading-none ${isActive ? 'text-cyan-500' : ''}`}>{icon}</span>
+            <span className="flex-1 text-left">{label}</span>
+            {isActive && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0"></span>}
+          </button>
+        );
+      })}
+    </nav>
+
+    {/* Bottom actions */}
+    <div className="px-3 py-4 border-t border-gray-100 dark:border-gray-800 space-y-0.5">
+      <button onClick={toggleTheme}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm
+          text-gray-500 dark:text-gray-400
+          hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-200 transition-colors">
+        <span className="w-5 text-center leading-none">{dark ? '☀' : '◑'}</span>
+        {dark ? 'โหมดสว่าง' : 'โหมดมืด'}
+      </button>
+      <button onClick={onReset}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm
+          text-gray-400 dark:text-gray-600
+          hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+        <span className="w-5 text-center leading-none">↺</span>
+        รีเซ็ตข้อมูล
+      </button>
+    </div>
+  </aside>
+);
+
+/* ─────────────────────────────────────────
    TAB: ชีวิต (Life Progress)
 ───────────────────────────────────────── */
 const LifeTab = ({ user }) => {
@@ -316,10 +384,11 @@ const LifeTab = ({ user }) => {
   const { year, daysPassed, daysLeft, totalDays, pct: yearPct } = yearStat;
 
   return (
-    <div className="space-y-4">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+    <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start">
+
+      {/* Greeting — full width on all screens */}
+      <div className="lg:col-span-2">
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-50">
           สวัสดี, {user.name}
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
@@ -327,108 +396,112 @@ const LifeTab = ({ user }) => {
         </p>
       </div>
 
-      {/* Ring Card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 flex flex-col items-center">
-        <div className="relative">
-          <ProgressRing pct={spentPct} size={210} stroke={15} />
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-4xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">
-              {spentPct.toFixed(1)}%
+      {/* LEFT COLUMN: Life ring */}
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 flex flex-col items-center">
+          <div className="relative">
+            <ProgressRing pct={spentPct} size={220} stroke={15} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">
+                {spentPct.toFixed(1)}%
+              </span>
+              <span className="text-xs text-gray-400 mt-1">ของชีวิตผ่านไปแล้ว</span>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 w-full mt-5">
+            {[
+              { top: `${remainingPct.toFixed(1)}%`, bot: 'ที่เหลือ' },
+              { top: daysRemaining.toLocaleString('th'), bot: 'วันที่เหลือ' },
+              { top: weeksRemaining.toLocaleString('th'), bot: 'สัปดาห์ที่เหลือ' },
+            ].map(({ top, bot }) => (
+              <div key={bot} className="bg-gray-50 dark:bg-gray-800 rounded-xl py-3 px-2 text-center">
+                <div className="text-base font-bold text-gray-900 dark:text-gray-100">{top}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{bot}</div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            อิงจากอายุขัยเฉลี่ยคนไทย 77 ปี (WHO/กรมอนามัย)
+          </p>
+        </div>
+
+        {/* Quote */}
+        <div className="rounded-2xl px-5 py-4 bg-cyan-500/10 border border-cyan-500/20">
+          <p className="text-sm text-cyan-600 dark:text-cyan-400 font-medium italic text-center leading-relaxed">
+            "ความสำเร็จที่มาผิดเวลา นั่นไม่เรียกว่าความสำเร็จ"
+          </p>
+        </div>
+      </div>
+
+      {/* RIGHT COLUMN: Year progress + weeks grid */}
+      <div className="space-y-4">
+        {/* Year Progress Card */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                ปี {year} ผ่านไปแล้ว
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                วันที่ {daysPassed} จาก {totalDays} วัน
+              </p>
+            </div>
+            <span className="text-2xl font-bold text-cyan-500 tabular-nums">
+              {yearPct.toFixed(1)}%
             </span>
-            <span className="text-xs text-gray-400 mt-1">ผ่านไปแล้ว</span>
           </div>
-        </div>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-2 w-full mt-5">
-          {[
-            { top: `${remainingPct.toFixed(1)}%`, bot: 'ที่เหลือ' },
-            { top: daysRemaining.toLocaleString('th'), bot: 'วันที่เหลือ' },
-            { top: weeksRemaining.toLocaleString('th'), bot: 'สัปดาห์ที่เหลือ' },
-          ].map(({ top, bot }) => (
-            <div key={bot} className="bg-gray-50 dark:bg-gray-800 rounded-xl py-3 px-2 text-center">
-              <div className="text-base font-bold text-gray-900 dark:text-gray-100">{top}</div>
-              <div className="text-xs text-gray-400 mt-0.5">{bot}</div>
+          <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden mb-3">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700"
+              style={{ width: `${yearPct.toFixed(2)}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl py-2.5 px-3 text-center">
+              <div className="text-base font-bold text-gray-900 dark:text-gray-100">{daysPassed.toLocaleString('th')}</div>
+              <div className="text-xs text-gray-400 mt-0.5">วันที่ผ่านไป</div>
             </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-gray-400 mt-4 text-center">
-          อิงจากอายุขัยเฉลี่ยคนไทย 77 ปี (WHO/กรมอนามัย)
-        </p>
-      </div>
-
-      {/* Year Progress Card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              ปี {year} ผ่านไปแล้ว
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              วันที่ {daysPassed} จาก {totalDays} วัน
-            </p>
-          </div>
-          <span className="text-2xl font-bold text-cyan-500 tabular-nums">
-            {yearPct.toFixed(1)}%
-          </span>
-        </div>
-
-        {/* Progress bar */}
-        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden mb-3">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700"
-            style={{ width: `${yearPct.toFixed(2)}%` }}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl py-2.5 px-3 text-center">
-            <div className="text-base font-bold text-gray-900 dark:text-gray-100">{daysPassed.toLocaleString('th')}</div>
-            <div className="text-xs text-gray-400 mt-0.5">วันที่ผ่านไป</div>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl py-2.5 px-3 text-center">
-            <div className="text-base font-bold text-cyan-500">{daysLeft.toLocaleString('th')}</div>
-            <div className="text-xs text-gray-400 mt-0.5">วันที่เหลือในปีนี้</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Weeks Grid accordion */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-        <button onClick={() => setGridOpen(o => !o)}
-          className="w-full px-4 py-3.5 flex items-center justify-between text-left">
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">แผนที่สัปดาห์ชีวิต</p>
-            <p className="text-xs text-gray-400 mt-0.5">{weeksLived.toLocaleString('th')} / {TOTAL_WEEKS.toLocaleString('th')} สัปดาห์</p>
-          </div>
-          <span className="text-gray-400 text-xs ml-3">{gridOpen ? '▲' : '▼'}</span>
-        </button>
-
-        {gridOpen && (
-          <div className="px-4 pb-4 border-t border-gray-50 dark:border-gray-800 pt-3">
-            <div className="overflow-x-auto">
-              <WeeksGrid weeksLived={weeksLived} />
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl py-2.5 px-3 text-center">
+              <div className="text-base font-bold text-cyan-500">{daysLeft.toLocaleString('th')}</div>
+              <div className="text-xs text-gray-400 mt-0.5">วันที่เหลือในปีนี้</div>
             </div>
-            <div className="flex gap-4 mt-3">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-sm bg-cyan-500"></div>
-                <span className="text-xs text-gray-400">ผ่านมาแล้ว</span>
+          </div>
+        </div>
+
+        {/* Weeks Grid accordion */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+          <button onClick={() => setGridOpen(o => !o)}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-left">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">แผนที่สัปดาห์ชีวิต</p>
+              <p className="text-xs text-gray-400 mt-0.5">{weeksLived.toLocaleString('th')} / {TOTAL_WEEKS.toLocaleString('th')} สัปดาห์</p>
+            </div>
+            <span className="text-gray-400 text-xs ml-3">{gridOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {gridOpen && (
+            <div className="px-4 pb-4 border-t border-gray-50 dark:border-gray-800 pt-3">
+              <div className="overflow-x-auto">
+                <WeeksGrid weeksLived={weeksLived} />
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-sm bg-gray-800"></div>
-                <span className="text-xs text-gray-400">ยังเหลืออยู่</span>
+              <div className="flex gap-4 mt-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-sm bg-cyan-500"></div>
+                  <span className="text-xs text-gray-400">ผ่านมาแล้ว</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-sm bg-gray-800"></div>
+                  <span className="text-xs text-gray-400">ยังเหลืออยู่</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Quote */}
-      <div className="rounded-2xl px-5 py-4 bg-cyan-500/8 border border-cyan-500/15">
-        <p className="text-sm text-cyan-600 dark:text-cyan-400 font-medium italic text-center leading-relaxed">
-          "ความสำเร็จที่มาผิดเวลา นั่นไม่เรียกว่าความสำเร็จ"
-        </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -453,6 +526,7 @@ const NorthStarTab = () => {
         <p className="text-sm text-gray-400 mt-0.5">เข็มทิศนำทางทุกการตัดสินใจ</p>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {[
         {
           field: 'happiness',
@@ -486,6 +560,7 @@ const NorthStarTab = () => {
           )}
         </div>
       ))}
+      </div>
 
       <p className="text-xs text-gray-400 text-center">✓ บันทึกอัตโนมัติในอุปกรณ์ของคุณ</p>
     </div>
@@ -610,7 +685,7 @@ const CountdownsTab = () => {
           <p className="text-xs mt-1 text-gray-400">กด + เพิ่ม เพื่อเริ่มต้น</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {items.map(item => (
             <CountdownCard key={item.id} item={item} onDelete={deleteItem} />
           ))}
@@ -822,7 +897,11 @@ const GoalsTab = () => {
         )}
       </div>
 
-      {wizard && <SmartWizard wizard={wizard} onNext={handleNext} onCancel={() => setWizard(null)} />}
+      {wizard && (
+        <div className="max-w-xl">
+          <SmartWizard wizard={wizard} onNext={handleNext} onCancel={() => setWizard(null)} />
+        </div>
+      )}
 
       {!wizard && goals.length === 0 && (
         <div className="text-center py-16 text-gray-300 dark:text-gray-700">
@@ -833,7 +912,7 @@ const GoalsTab = () => {
       )}
 
       {!wizard && goals.length > 0 && (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {goals.map(g => (
             <GoalCard key={g.id} goal={g}
               onDelete={id => persist(goals.filter(x => x.id !== id))}
@@ -897,7 +976,7 @@ const NotesTab = () => {
           value={content}
           onChange={e => handleChange(e.target.value)}
           placeholder={`เขียนอะไรก็ได้...\n\nบันทึกความคิด, สิ่งที่ทำวันนี้, หรือสะท้อนตัวเอง`}
-          className="w-full h-72 bg-transparent text-gray-900 dark:text-gray-100 p-5 text-sm resize-none
+          className="w-full h-72 lg:h-96 bg-transparent text-gray-900 dark:text-gray-100 p-5 text-sm resize-none
             border-0 placeholder-gray-300 dark:placeholder-gray-600 leading-relaxed"
         />
         <div className="px-5 pb-4 flex items-center justify-between border-t border-gray-50 dark:border-gray-800 pt-2">
@@ -1050,7 +1129,7 @@ const OnboardingScreen = ({ onComplete }) => {
 const Dashboard = ({ user, onReset, dark, toggleTheme }) => {
   const [tab, setTab] = useState('life');
 
-  const tabs = {
+  const tabContent = {
     life:  <LifeTab user={user} />,
     north: <NorthStarTab />,
     count: <CountdownsTab />,
@@ -1058,37 +1137,60 @@ const Dashboard = ({ user, onReset, dark, toggleTheme }) => {
     notes: <NotesTab />,
   };
 
+  const tabTitle = NAV.find(n => n.id === tab)?.label ?? '';
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Top header */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-cyan-500 text-lg">⧗</span>
-            <span className="font-bold text-gray-900 dark:text-gray-100 text-sm tracking-tight">LifeHorizon</span>
+
+      {/* Sidebar — lg+ only */}
+      <SideNav active={tab} onSelect={setTab} user={user}
+        dark={dark} toggleTheme={toggleTheme} onReset={onReset} />
+
+      {/* Content area — shifts right on desktop */}
+      <div className="with-sidebar flex flex-col min-h-screen">
+
+        {/* Top header — mobile & tablet only */}
+        <header className="lg:hidden sticky top-0 z-40
+          bg-white/90 dark:bg-gray-950/95 backdrop-blur-md
+          border-b border-gray-100 dark:border-gray-800">
+          <div className="px-4 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-cyan-500 text-lg">⧗</span>
+              <span className="font-bold text-gray-900 dark:text-gray-100 text-sm tracking-tight">LifeHorizon</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={toggleTheme}
+                className="w-9 h-9 flex items-center justify-center rounded-xl
+                  text-gray-500 hover:text-gray-800 dark:hover:text-gray-200
+                  hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-base">
+                {dark ? '☀' : '◑'}
+              </button>
+              <button onClick={onReset}
+                className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
+                  px-2 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                รีเซ็ต
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={toggleTheme}
-              className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:text-gray-800
-                dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-base">
-              {dark ? '☀' : '◑'}
-            </button>
-            <button onClick={onReset}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
-                px-2 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              รีเซ็ต
-            </button>
-          </div>
+        </header>
+
+        {/* Desktop page title bar */}
+        <div className="hidden lg:flex items-center px-8 py-5 border-b border-gray-100 dark:border-gray-800
+          bg-white dark:bg-gray-950 sticky top-0 z-40">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">{tabTitle}</h1>
         </div>
-      </header>
 
-      {/* Tab content */}
-      <main className="max-w-lg mx-auto px-4 py-5 pb-28 tab-enter" key={tab}>
-        {tabs[tab]}
-      </main>
+        {/* Main content */}
+        <main className="flex-1 px-4 md:px-6 lg:px-8 py-5 lg:py-7
+          pb-28 lg:pb-10
+          w-full max-w-5xl
+          tab-enter" key={tab}>
+          {tabContent[tab]}
+        </main>
 
-      {/* Bottom navigation */}
-      <BottomNav active={tab} onSelect={setTab} />
+        {/* Bottom navigation — mobile & tablet only */}
+        <BottomNav active={tab} onSelect={setTab} />
+      </div>
     </div>
   );
 };
